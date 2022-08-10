@@ -1,53 +1,42 @@
 const fs = require("fs");
-const readline = require("readline");
+const ejs = require("ejs");
 const { google } = require("googleapis");
 const moment = require("moment");
 const SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.events"];
-const TOKEN_PATH = "calendarToken.json";
 const xlsx = require("node-xlsx");
+const app = require("express")();
+const file = xlsx.parse("./ESC.xlsx");
+let auth;
+let index = 3;
 
 function init(name, date) {
-    console.log(name, date);
     fs.readFile("./credentials.json", (err, content) => {
         if (err) return console.log("Error loading client secret file:", err);
         // Authorize a client with credentials, then call the Google Calendar API.
-        authorize(JSON.parse(content), (auth) => {
+        return authorize(JSON.parse(content), (auth) => {
             addEvent(auth, name, date);
         });
     });
 }
 
-function authorize(cred, cb) {
+async function authorize(cred, cb) {
     const { client_secret, client_id, redirect_uris } = cred.installed;
     const authClient = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-    fs.readFile(TOKEN_PATH, (err, token) => {
-        if (err) return getAccessToken(authClient, cb);
-        authClient.setCredentials(JSON.parse(token));
-        cb(authClient);
-    });
+    if (!process.client) return getAccessToken(authClient, cb);
+    authClient.generateAuthUrl({ scope: SCOPES })
+    authClient.setCredentials(JSON.parse(process.token));
+    auth = authClient;
 }
 
-function getAccessToken(client, cb) {
-    const authURL = client.generateAuthUrl({ scope: SCOPES });
-    console.log("Authorize this app by visiting this url:", authURL);
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-    rl.question("Enter the code from that page here: ", (code) => {
-        rl.close();
-        client.getToken(code, (err, token) => {
-            if (err) {
-                console.error("Error retrieving access token", err);
-                return;
-            }
-            client.setCredentials(token);
-
-            fs.writeFile(TOKEN_PATH, JSON.stringify(token), (err) => {
-                if (err) return console.log(err);
-                console.log("Token saved at:", TOKEN_PATH);
-            });
-            cb(client);
-        });
+function getAccessToken(code, client, cb) {
+    client.getToken(code, (err, token) => {
+        if (err) {
+            console.error("Error retrieving access token", err);
+            return;
+        }
+        client.setCredentials(token);
+        process.token = token;
+        cb(client);
     });
 }
 
@@ -119,40 +108,34 @@ function birthdayMessage(name, date) {
         },
     };
 }
-let index = 3;
 
-const file = xlsx.parse("./ESC.xlsx");
+function addToCalendar(res) {
+    setInterval(() => {
+        let data = file[0].data[index];
+        let birthday =
+            typeof data[4] === "string"
+                ? data[4].replace("st", "").replace("th", "").replace("nd", "").replace("rd", "")
+                : "";
+        const date = birthday.substring(0, birthday.lastIndexOf(" ") + 1);
+        init(data[1], date.includes("Augu ") ? date.replace("Augu ", "August ") : date);
+        index += 1;
+        if (index >= file[0].data.length) {
+            res("Events added to calendar");
+        }
+    }, 1000);
+}
 
-// for (const data of file[0].data) {
-//     if (index > 99) break;
-//     index += 1;
-
-//     
-// }
-
-// for (const data of file[0].data) {
-//     if (index > 199) break;
-//     index += 1;
-
-//     let birthday =
-//         typeof data[4] === "string"
-//             ? data[4].replace("st", "").replace("th", "").replace("nd", "").replace("rd", "")
-//             : "";
-//     const date = birthday.substring(0, birthday.lastIndexOf(" ") + 1);
-//     // setInterval(() => {
-//     //     init(data[1], date.includes("Augu ") ? date.replace("Augu ", "August ") : date);
-//     // }, 1000);
-// }
-setInterval(() => {
-    let data = file[0].data[index]
-    let birthday =
-        typeof data[4] === "string"
-            ? data[4].replace("st", "").replace("th", "").replace("nd", "").replace("rd", "")
-            : "";
-    const date = birthday.substring(0, birthday.lastIndexOf(" ") + 1);
-    init(data[1], date.includes("Augu ") ? date.replace("Augu ", "August ") : date);
-    index += 1
-    if(index >=file[0].data.length){
-        process.exit()
+app.get("/", async function (req, res) {
+    console.log("");
+    if (req.query) {
+        const authURL = await 
+        const html = await ejs.renderFile("../templates/submitcode.ejs", { authlink: authURL, url: url });
+        res.end(html);
+    } else {
+        addToCalendar(res.end);
     }
-}, 1000);
+});
+
+app.listen(8080, () => {
+    console.log("Listening on port 8080");
+});

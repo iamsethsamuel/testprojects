@@ -10,8 +10,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/vision": "^2.4.2",
     "dotenv": "^16.0.0",
     "ejs": "^3.1.6",
+    "express": "^4.17.2",
+    "fb": "^2.0.0",
     "gmail-send": "^1.8.10",
     "googleapis": "^66.0.0",
     "isomorphic-fetch": "^3.0.0",
